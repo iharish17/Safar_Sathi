@@ -10,10 +10,6 @@ const AppNavbar = () => {
   const [menuState, setMenuState] = useState({ path: location.pathname, open: false });
   const isMenuOpen = menuState.path === location.pathname && menuState.open;
 
-  const isActive = (path) => {
-    if (path === '/') return location.pathname === '/';
-    return location.pathname.startsWith(path);
-  };
 
   const toggleMenu = () => {
     setMenuState({ path: location.pathname, open: !isMenuOpen });
