@@ -1,0 +1,90 @@
+/* design-tokens.css */
+:root {
+  --color-primary: #0b4da8;
+  --color-primary-dark: #07377c;
+  --color-primary-light: #dce9fb;
+  --color-primary-soft: #eef4ff;
+
+  --color-accent: #f07c2f;
+  --color-accent-dark: #cf641c;
+  --color-accent-soft: #fff2e8;
+
+  --color-success: #1f9d64;
+  --color-success-soft: #e7f8f0;
+  --color-error: #d14343;
+  --color-error-soft: #ffecec;
+  --color-warning: #d8a100;
+  --color-info: #1379a9;
+
+  --color-bg-base: #f3f7fd;
+  --color-bg-surface: #ffffff;
+  --color-bg-surface-elevated: #fcfdff;
+  --color-bg-tint: #f7fbff;
+
+  --color-text-primary: #12213a;
+  --color-text-secondary: #4c5e79;
+  --color-text-muted: #7f8ea6;
+  --color-text-inverse: #ffffff;
+
+  --border-color-base: #d9e4f3;
+  --border-color-light: #e7eef8;
+  --border-color-strong: #bfd0e8;
+
+  --font-family-base: 'Inter', Arial, Helvetica, sans-serif;
+  --font-family-display: 'Inter', Arial, Helvetica, sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 0.9375rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 2rem;
+  --font-size-4xl: 2.8rem;
+
+  --font-size-heading: 1.5rem;
+  --font-size-subheading: 1.125rem;
+  --font-size-body: 0.875rem;
+  --font-size-label: 0.75rem;
+  --font-size-button: 0.9375rem;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-black: 800;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-2xl: 28px;
+  --radius-full: 9999px;
+
+  --shadow-sm: 0 4px 12px rgba(11, 77, 168, 0.08);
+  --shadow-md: 0 10px 24px rgba(10, 48, 106, 0.12);
+  --shadow-lg: 0 20px 44px rgba(7, 55, 124, 0.18);
+  --shadow-card: 0 14px 28px rgba(15, 67, 145, 0.1);
+  --shadow-glow: 0 0 0 8px rgba(11, 77, 168, 0.12);
+
+  --gradient-page: radial-gradient(circle at 8% 0%, #ffffff 0%, #edf4ff 35%, #f5f8ff 70%, #eef6ff 100%);
+  --gradient-primary: linear-gradient(135deg, #0e5ec9 0%, #0a3f88 100%);
+  --gradient-accent: linear-gradient(135deg, #ff9e50 0%, #e66814 100%);
+
+  --max-width-content: 1200px;
+  --header-height: 68px;
+
+  --transition-fast: 140ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-slow: 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
