@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Train, Clock, ShieldCheck, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import '../styles/LandingPage.css';
 
 
@@ -24,17 +25,14 @@ const featureItem = {
 const MotionDiv = motion.div;
 const MotionButton = motion.button;
 
-const LandingPage = () => {
-  const navigateTo = (path) => {
-    window.location.assign(path);
-  };
-
+function LandingPage() {
+  const navigate = useNavigate();
 
   return (
     <div className="landing-container">
       <main className="landing-main container">
         <section className="hero-layout">
-          <MotionDiv 
+          <MotionDiv
             className="hero-section flex-col items-start text-left"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -42,26 +40,26 @@ const LandingPage = () => {
           >
             <div className="hero-badge badge badge-info">Introducing Delayed Passenger System</div>
             <h1 className="hero-title">
-              Missed Your Train? <br/>
+              Missed Your Train? <br />
               <span className="text-accent">"Catch It Later"</span>
             </h1>
             <p className="hero-subtitle">
-              Don't worry about being marked "No Show". Safar Sathi helps you find the next catchable station and securely notifies the TTE.
+              Don&apos;t worry about being marked "No Show". Safar Sathi helps you find the next catchable station and securely notifies the TTE.
             </p>
-            
+
             <div className="hero-actions flex gap-4 mt-6">
-              <MotionButton 
+              <MotionButton
                 className="btn btn-primary hero-cta group interactive-lift"
-                onClick={() => navigateTo('/missed-train')}
+                onClick={() => navigate('/missed-train')}
                 whileHover={{ y: -2 }}
                 whileTap={{ scale: 0.98 }}
               >
                 Train Recovery
                 <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform inline-block ml-2" />
               </MotionButton>
-              <MotionButton 
+              <MotionButton
                 className="btn btn-outline hero-cta group bg-white border-primary text-primary interactive-lift"
-                onClick={() => navigateTo('/search')}
+                onClick={() => navigate('/missed-train')}
                 whileHover={{ y: -2 }}
                 whileTap={{ scale: 0.98 }}
               >
@@ -72,7 +70,7 @@ const LandingPage = () => {
           </MotionDiv>
         </section>
 
-        <MotionDiv 
+        <MotionDiv
           className="features-grid"
           variants={featureReveal}
           initial="hidden"
@@ -109,6 +107,6 @@ const LandingPage = () => {
       </main>
     </div>
   );
-};
+}
 
 export default LandingPage;
