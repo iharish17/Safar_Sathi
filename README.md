@@ -22,7 +22,101 @@ Safar Sathi is a train recovery and passenger protection app. It helps users sea
 - Backend: Node.js, Express, Socket.IO (for passenger and tte connection), CORS
 - Data: Trains Dataset from Kaggle
 
-## 📂 Project Structure (Final)
+## � Installation & Setup
+
+### Backend Setup
+
+1. Navigate to the backend directory:
+```bash
+cd backend
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Create a `.env` file in the backend directory:
+```bash
+PORT=5000
+NODE_ENV=development
+```
+
+4. Start the backend server:
+```bash
+npm start
+```
+The server will run on `http://localhost:5000`
+
+### Frontend Setup
+
+1. Navigate to the frontend directory:
+```bash
+cd frontend
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Create a `.env` file in the frontend directory:
+```bash
+VITE_API_BASE=http://localhost:5000
+```
+
+4. Start the development server:
+```bash
+npm run dev
+```
+The frontend will run on `http://localhost:5173`
+
+5. Build for production:
+```bash
+npm run build
+```
+
+### Running the Full App Locally
+
+1. Open two terminal windows/tabs
+
+2. **Terminal 1 - Backend:**
+```bash
+cd backend
+npm start
+```
+
+3. **Terminal 2 - Frontend:**
+```bash
+cd frontend
+npm run dev
+```
+
+4. Open your browser and navigate to `http://localhost:5173`
+
+### Testing Mock Data
+
+Use these PNR numbers to test the app:
+- `4928174021` - Train 01211 (BADNERA JN → NASIK ROAD)
+- `5475698745` - Train 18102 (JAMMU TAWI - JAT → TATANAGAR JN)
+- `1234567890` - Train 01209 (NAGPUR → PUNE JN)
+
+
+### Deployment
+
+**Backend Deployment (Render, Railway, or Fly.io):**
+1. Push your code to GitHub
+2. Connect your repository to your hosting platform
+3. Set environment variables in the platform dashboard
+4. Deploy with build command: `npm install` and start command: `npm start`
+
+**Frontend Deployment (Vercel):**
+1. Push your code to GitHub
+2. Connect your repository to Vercel
+3. Set `VITE_API_BASE` environment variable to your deployed backend URL
+4. Vercel will auto-build and deploy on each push
+
+## �📂 Project Structure (Final)
 
 ```text
 safarsathi/

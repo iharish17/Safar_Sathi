@@ -11,9 +11,9 @@ const mockPnrs = {
   },
   "5475698745": {
     pnr: "5475698745",
-    trainNumber: "01212",
-    source: "NASIK ROAD",
-    destination: "BADNERA JN",
+    trainNumber: "18102",
+    source: "JAT",
+    destination: "TATA JN",
     passengers: [
       { name: 'Harish Kumar', age: 18, gender: 'M', coach: 'B2', seat: '41', status: 'CNF' }
     ]
