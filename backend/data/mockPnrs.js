@@ -9,8 +9,8 @@ const mockPnrs = {
       { name: 'Vikram Sharma', age: 30, gender: 'M', coach: 'S4', seat: '13', status: 'CNF' }
     ]
   },
-  "1234123412": {
-    pnr: "1234123412",
+  "5475698745": {
+    pnr: "5475698745",
     trainNumber: "18102",
     source: "JAT",
     destination: "TATA",
