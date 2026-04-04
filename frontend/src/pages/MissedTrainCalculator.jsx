@@ -8,6 +8,7 @@ import '../styles/MissedTrainCalculator.css';
 
 const RECENT_SEARCHES_KEY = 'safarsathi_recent_missed_train_searches_v1';
 const MAX_RECENT_SEARCHES = 6;
+const BACKEND_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000';
 
 const safeReadRecentSearches = () => {
     if (typeof window === 'undefined') return [];
@@ -534,7 +535,7 @@ const MissedTrainCalculator = () => {
     }, []);
 
     useEffect(() => {
-        const newSocket = io('http://localhost:5000');
+        const newSocket = io(BACKEND_BASE);
         const refreshCurrentAndRecentStatuses = async () => {
             try {
                 const requests = await getTteRequests();

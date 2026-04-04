@@ -20,7 +20,7 @@ Safar Sathi is a train recovery and passenger protection app. It helps users sea
 
 - Frontend: React, Vite, React Router, Framer Motion, Lucide React, qrcode.react
 - Backend: Node.js, Express, Socket.IO (for passenger and tte connection), CORS
-- Data: local JSON files and mock PNR records
+- Data: Trains Data from Kaggle
 
 ## 📂 Project Structure (Final)
 

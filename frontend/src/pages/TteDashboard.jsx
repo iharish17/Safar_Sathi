@@ -15,6 +15,7 @@ import '../styles/TteDashboard.css';
 const TTE_CACHE_KEY = 'safarsathi_tte_cached_requests_v1';
 const TTE_QUEUE_KEY = 'safarsathi_tte_action_queue_v1';
 const PRIORITY_CATCH_WINDOW_MINS = 90;
+const BACKEND_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000';
 
 // Mock passenger manifest data
 const mockPassengers = [
@@ -270,7 +271,7 @@ const TteDashboard = () => {
      };
      fetchInitialRequests();
 
-     const newSocket = io('http://localhost:5000');
+    const newSocket = io(BACKEND_BASE);
      newSocket.emit('tte_join');
      
      const onNewRequest = (req) => {
