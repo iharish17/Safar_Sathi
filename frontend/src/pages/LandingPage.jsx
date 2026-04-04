@@ -1,7 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Train, Clock, ShieldCheck, ArrowRight } from 'lucide-react';
-import AppNavbar from '../components/AppNavbar';
 import '../styles/LandingPage.css';
 
 
@@ -33,7 +32,6 @@ const LandingPage = () => {
 
   return (
     <div className="landing-container">
-      <AppNavbar />
       <main className="landing-main container">
         <section className="hero-layout">
           <MotionDiv 
@@ -54,7 +52,7 @@ const LandingPage = () => {
             <div className="hero-actions flex gap-4 mt-6">
               <MotionButton 
                 className="btn btn-primary hero-cta group interactive-lift"
-                onClick={() => navigateTo('/')}
+                onClick={() => navigateTo('/missed-train')}
                 whileHover={{ y: -2 }}
                 whileTap={{ scale: 0.98 }}
               >
@@ -63,7 +61,7 @@ const LandingPage = () => {
               </MotionButton>
               <MotionButton 
                 className="btn btn-outline hero-cta group bg-white border-primary text-primary interactive-lift"
-                onClick={() => navigateTo('/')}
+                onClick={() => navigateTo('/search')}
                 whileHover={{ y: -2 }}
                 whileTap={{ scale: 0.98 }}
               >

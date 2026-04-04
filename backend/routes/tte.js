@@ -15,4 +15,4 @@ module.exports = (trains) => {
 };
 
 module.exports.getTteRequests = getTteRequests;
-modulue.exports.tteRequests = tteRequests;
+module.exports.tteRequests = tteRequests;

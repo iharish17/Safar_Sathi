@@ -10,6 +10,10 @@ const AppNavbar = () => {
   const [menuState, setMenuState] = useState({ path: location.pathname, open: false });
   const isMenuOpen = menuState.path === location.pathname && menuState.open;
 
+  const isActive = (path) => {
+    if (path === '/') return location.pathname === '/';
+    return location.pathname.startsWith(path);
+  };
 
   const toggleMenu = () => {
     setMenuState({ path: location.pathname, open: !isMenuOpen });
@@ -41,21 +45,21 @@ const AppNavbar = () => {
 
       <div className={`app-nav-links ${isMenuOpen ? 'is-open' : ''}`}>
         <button
-          className="app-nav-link-btn"
-          onClick={() => goTo('/')}
+          className={`app-nav-link-btn ${isActive('/missed-train') ? 'is-active' : ''}`}
+          onClick={() => goTo('/missed-train')}
         >
-          Train Recovery
+          Missed Train
         </button>
 
         <button
-          className="app-nav-link-btn"
-          onClick={() => goTo('/')}
+          className={`app-nav-link-btn ${isActive('/search') || isActive('/train') ? 'is-active' : ''}`}
+          onClick={() => goTo('/search')}
         >
           Live Track
         </button>
 
         {isLandingPage && (
-          <button className="btn btn-outline" onClick={() => goTo('/')}>
+          <button className="btn btn-outline" onClick={() => goTo('/tte-dashboard')}>
             TTE Login
           </button>
         )}
