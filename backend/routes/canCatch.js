@@ -4,6 +4,24 @@ const { getStationCode, timeToMins } = require('../utils/helpers');
 
 module.exports = (trains) => {
 
+  const MAX_ALT_WAIT_MINS = 6 * 60;
+  const MAX_EARLY_ARRIVAL_MINS = 6 * 60;
+  const DAY_MINS = 24 * 60;
+  const isSchedulableTime = (value) => {
+    const text = String(value || '').trim().toLowerCase();
+    return text && text !== 'source' && text !== 'destination';
+  };
+  const hhmmToMinutes = (value) => {
+    const [h, m] = String(value || '').split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+    return (h * 60) + m;
+  };
+  const minutesUntilNextOccurrence = (fromClockMins, toClockMins) => {
+    if (fromClockMins === null || toClockMins === null) return null;
+    const diff = toClockMins - fromClockMins;
+    return diff >= 0 ? diff : diff + DAY_MINS;
+  };
+
   router.get('/', (req, res) => {
     const { train: trainNumber, boarding, current } = req.query;
     const train = trains.find(t => t.trainNumber === trainNumber);
@@ -42,27 +60,30 @@ module.exports = (trains) => {
     else if (totalStops > 20) skipLimit = 10;
 
     const lastValidIndex = boardingIndex + skipLimit;
-    const canCatch = currentIndex <= lastValidIndex && lastValidIndex < route.length;
+    const boundedLastValidIndex = Math.min(lastValidIndex, route.length - 1);
+    const canCatch = currentIndex <= boundedLastValidIndex;
 
-    const nextStations = route.slice(currentIndex + 1, lastValidIndex + 1);
-    const lastValidStation = route[Math.min(lastValidIndex, route.length - 1)];
+    const nextStations = route.slice(currentIndex + 1, boundedLastValidIndex + 1);
+    const lastValidStation = route[boundedLastValidIndex];
 
     let alternateTrains = [];
 
     if (canCatch && lastValidStation) {
       const currentStationCode = getStationCode(route[currentIndex].stationName);
       const originalDepMinsFromCurrent = timeToMins(route[currentIndex].departs, route[currentIndex].day);
+      const originalDepClockMins = hhmmToMinutes(route[currentIndex].departs);
 
       const candidateCatchStops = route
-        .slice(currentIndex + 1, lastValidIndex + 1)
+        .slice(currentIndex + 1, boundedLastValidIndex + 1)
         .map((stop, offset) => ({
           stop,
           routeIndex: currentIndex + 1 + offset,
           stationCode: getStationCode(stop.stationName),
-          originalArrMins: timeToMins(stop.arrives, stop.day)
+          originalArrMins: timeToMins(stop.arrives, stop.day),
+          originalTravelMins: Math.max(0, timeToMins(stop.arrives, stop.day) - originalDepMinsFromCurrent)
         }));
 
-      const findEarliestCatchForAltTrain = (altTrain, strictTimeCheck) => {
+      const findEarliestCatchForAltTrain = (altTrain) => {
         const altRoute = altTrain.trainRoute;
         const altCurrentIndex = altRoute.findIndex(
           st => getStationCode(st.stationName) === currentStationCode
@@ -70,7 +91,15 @@ module.exports = (trains) => {
 
         if (altCurrentIndex === -1) return null;
 
-        const altDepMins = timeToMins(altRoute[altCurrentIndex].departs, altRoute[altCurrentIndex].day);
+        const altCurrentStop = altRoute[altCurrentIndex];
+        if (!isSchedulableTime(altCurrentStop?.departs)) return null;
+
+        const altDepMins = timeToMins(altCurrentStop.departs, altCurrentStop.day);
+        const altDepClockMins = hhmmToMinutes(altCurrentStop.departs);
+        const waitMins = minutesUntilNextOccurrence(originalDepClockMins, altDepClockMins);
+        const depAfterMissedPoint = waitMins !== null && waitMins > 0;
+
+        if (!depAfterMissedPoint || waitMins > MAX_ALT_WAIT_MINS) return null;
 
         for (const candidate of candidateCatchStops) {
           const altCatchIndex = altRoute.findIndex(
@@ -79,28 +108,35 @@ module.exports = (trains) => {
 
           if (altCatchIndex === -1 || altCurrentIndex >= altCatchIndex) continue;
 
-          if (strictTimeCheck) {
-            const depAfterMissedPoint = altDepMins > originalDepMinsFromCurrent;
-            const altArrMins = timeToMins(altRoute[altCatchIndex].arrives, altRoute[altCatchIndex].day);
-            const arrivesBeforeOriginal = altArrMins < candidate.originalArrMins;
-            if (!depAfterMissedPoint || !arrivesBeforeOriginal) continue;
-          }
+          const altCatchStop = altRoute[altCatchIndex];
+          if (!isSchedulableTime(altCatchStop?.arrives) || !isSchedulableTime(candidate.stop?.arrives)) continue;
+
+          const altArrMins = timeToMins(altCatchStop.arrives, altCatchStop.day);
+          const altTravelMins = Math.max(0, altArrMins - altDepMins);
+          const altArrivalFromMissedMins = waitMins + altTravelMins;
+          const originalArrivalFromMissedMins = candidate.originalTravelMins;
+
+          const leadMins = originalArrivalFromMissedMins - altArrivalFromMissedMins;
+          const arrivesBeforeOriginal = leadMins > 0;
+          const withinPracticalArrivalWindow = leadMins <= MAX_EARLY_ARRIVAL_MINS;
+          if (!arrivesBeforeOriginal || !withinPracticalArrivalWindow) continue;
 
           return {
             trainNumber: altTrain.trainNumber,
             trainName: altTrain.trainName,
-            departureTime: altRoute[altCurrentIndex].departs,
-            departureDay: altRoute[altCurrentIndex].day,
-            arrivalTime: altRoute[altCatchIndex].arrives,
-            arrivalDay: altRoute[altCatchIndex].day,
-            boardingStation: altRoute[altCurrentIndex].stationName,
-            catchStation: altRoute[altCatchIndex].stationName,
+            departureTime: altCurrentStop.departs,
+            departureDay: altCurrentStop.day,
+            arrivalTime: altCatchStop.arrives,
+            arrivalDay: altCatchStop.day,
+            boardingStation: altCurrentStop.stationName,
+            catchStation: altCatchStop.stationName,
             originalCatchStation: candidate.stop.stationName,
             originalArrivalAtCatch: candidate.stop.arrives,
             originalArrivalDayAtCatch: candidate.stop.day,
             originalDepartureAtCatch: candidate.stop.departs,
             originalDepartureDayAtCatch: candidate.stop.day,
             catchRouteIndex: candidate.routeIndex,
+            leadMins,
             isRunningLate: true,
             delayMins: Math.floor(Math.random() * 60) + 15
           };
@@ -111,16 +147,8 @@ module.exports = (trains) => {
 
       for (const altTrain of trains) {
         if (altTrain.trainNumber === trainNumber) continue;
-        const match = findEarliestCatchForAltTrain(altTrain, true);
+        const match = findEarliestCatchForAltTrain(altTrain);
         if (match) alternateTrains.push(match);
-      }
-
-      if (alternateTrains.length === 0) {
-        for (const altTrain of trains) {
-          if (altTrain.trainNumber === trainNumber) continue;
-          const match = findEarliestCatchForAltTrain(altTrain, false);
-          if (match) alternateTrains.push(match);
-        }
       }
 
       alternateTrains.sort((a, b) => a.catchRouteIndex - b.catchRouteIndex);
@@ -137,7 +165,7 @@ module.exports = (trains) => {
       currentIndex,
       lastValidIndex,
       totalStations: route.length,
-      stationsGap: lastValidIndex - boardingIndex,
+      stationsGap: Math.max(0, boundedLastValidIndex - currentIndex),
       alternateTrains: alternateTrains.length > 0 ? alternateTrains : null
     });
   });

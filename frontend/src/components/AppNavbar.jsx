@@ -48,14 +48,14 @@ const AppNavbar = () => {
           className={`app-nav-link-btn ${isActive('/missed-train') ? 'is-active' : ''}`}
           onClick={() => goTo('/missed-train')}
         >
-          Missed Train
+          Recover Train
         </button>
 
         <button
           className={`app-nav-link-btn ${isActive('/search') || isActive('/train') ? 'is-active' : ''}`}
           onClick={() => goTo('/search')}
         >
-          Live Track
+          Track Trains
         </button>
 
         {isLandingPage && (

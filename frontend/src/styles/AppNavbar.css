@@ -66,6 +66,19 @@
   color: var(--color-primary);
 }
 
+.app-nav-links .btn.btn-outline {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.app-nav-links .btn.btn-outline:hover,
+.app-nav-links .btn.btn-outline:focus-visible {
+  background: var(--color-primary-dark);
+  color: #fff;
+  border-color: var(--color-primary-dark);
+}
+
 .app-nav-toggle {
   display: none;
   align-items: center;

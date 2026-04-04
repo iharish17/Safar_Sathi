@@ -4,9 +4,14 @@ import { User, Train, Clock, MapPin, Check, X, ShieldAlert } from 'lucide-react'
 import '../styles/RequestCard.css';
 
 const RequestCard = ({ request, onAccept, onReject, onMarkPresent }) => {
+  const MotionDiv = motion.div;
   const isPending = request.status === 'Pending';
   const isApproved = request.status === 'Approved';
   const isPresent = request.status === 'Present';
+  const stationsGapValue = Number(request.stationsGap);
+  const skipLimitValue = Number(request.skipLimit);
+  const hasStationsGap = Number.isFinite(stationsGapValue);
+  const hasSkipLimit = Number.isFinite(skipLimitValue);
   const statusClass = isPending
     ? 'status-pending'
     : isApproved
@@ -16,7 +21,7 @@ const RequestCard = ({ request, onAccept, onReject, onMarkPresent }) => {
     : 'status-rejected';
 
   return (
-    <motion.div 
+    <MotionDiv 
       className={`card request-card ${statusClass} ${isPresent ? 'request-muted' : ''}`}
       layout
       initial={{ opacity: 0, scale: 0.95 }}
@@ -78,8 +83,8 @@ const RequestCard = ({ request, onAccept, onReject, onMarkPresent }) => {
 
       <div className="my-3 p-3 bg-gray-50 rounded-lg border border-gray-100 text-sm">
         <div className="flex justify-between items-center mb-1">
-           <span className="font-semibold text-gray-700">Boarding after {request.stationsGap || '?'} stations</span>
-           {request.stationsGap > request.skipLimit ? (
+           <span className="font-semibold text-gray-700">Boarding after {hasStationsGap ? stationsGapValue : '?'} stations</span>
+           {hasStationsGap && hasSkipLimit && stationsGapValue > skipLimitValue ? (
                <span className="px-2 py-0.5 rounded text-white bg-error text-xs font-bold">Exceeds Limit ({request.skipLimit})</span>
            ) : (
                <span className="px-2 py-0.5 rounded text-white bg-success text-xs font-bold">Within Limit ({request.skipLimit})</span>
@@ -93,6 +98,22 @@ const RequestCard = ({ request, onAccept, onReject, onMarkPresent }) => {
       {request.message && (
         <div className="mb-4 p-3 bg-blue-50 border-l-4 border-blue-400 rounded-r-lg text-sm text-blue-900 italic">
           "{request.message}"
+        </div>
+      )}
+
+      {Array.isArray(request.changeLog) && request.changeLog.length > 0 && (
+        <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-100 text-xs">
+          <p className="font-semibold text-gray-700 mb-2">Request History</p>
+          <div className="flex flex-col gap-1">
+            {request.changeLog.slice(-4).reverse().map((entry, idx) => (
+              <div key={`${entry.timestamp || 't'}-${idx}`} className="text-secondary">
+                <span className="font-semibold text-gray-700">{entry.action || 'updated'}</span>
+                {' '}
+                <span>by {entry.actor || 'system'}</span>
+                {entry.timestamp && <span> at {new Date(entry.timestamp).toLocaleTimeString()}</span>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -127,7 +148,7 @@ const RequestCard = ({ request, onAccept, onReject, onMarkPresent }) => {
           </button>
         </div>
       )}
-    </motion.div>
+    </MotionDiv>
   );
 };
 

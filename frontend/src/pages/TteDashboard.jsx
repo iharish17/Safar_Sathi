@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -11,6 +11,10 @@ import { getTteRequests } from '../services/api';
 import RequestCard from '../components/RequestCard';
 import { io } from 'socket.io-client';
 import '../styles/TteDashboard.css';
+
+const TTE_CACHE_KEY = 'safarsathi_tte_cached_requests_v1';
+const TTE_QUEUE_KEY = 'safarsathi_tte_action_queue_v1';
+const PRIORITY_CATCH_WINDOW_MINS = 90;
 
 // Mock passenger manifest data
 const mockPassengers = [
@@ -37,6 +41,7 @@ const normalizeStatus = (status) => {
   if (value === 'approved') return 'Approved';
   if (value === 'present') return 'Present';
   if (value === 'rejected') return 'Rejected';
+  if (value === 'cancelled') return 'Cancelled';
   return 'Pending';
 };
 
@@ -49,25 +54,107 @@ const normalizeRequest = (request = {}) => ({
   passengers: Array.isArray(request.passengers) && request.passengers.length > 0
     ? request.passengers
     : [{ name: 'Passenger', age: '', gender: '', coach: '-', seat: '-' }],
+  changeLog: Array.isArray(request.changeLog) ? request.changeLog : [],
   timestamp: request.timestamp || request.createdAt || new Date().toISOString(),
 });
 
+const toClockMinutes = (timeLabel = '') => {
+  const match = String(timeLabel || '').match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+  return (hour * 60) + minute;
+};
+
+const getMinutesUntilClock = (timeLabel = '') => {
+  const target = toClockMinutes(timeLabel);
+  if (target === null) return null;
+  const now = new Date();
+  const nowMins = (now.getHours() * 60) + now.getMinutes();
+  const diff = target - nowMins;
+  return diff >= 0 ? diff : diff + (24 * 60);
+};
+
+const getPriorityInfo = (request = {}) => {
+  const stationsGap = Number(request.stationsGap);
+  const minsUntilEta = getMinutesUntilClock(request.eta);
+  const byEta = Number.isFinite(minsUntilEta) && minsUntilEta >= 0 && minsUntilEta <= PRIORITY_CATCH_WINDOW_MINS;
+  const byGap = Number.isFinite(stationsGap) && stationsGap <= 2;
+
+  if (byEta || byGap) {
+    const reason = byEta
+      ? `Catch window closes in ~${minsUntilEta} min`
+      : 'Very few stations left to catch';
+    return { level: 'high', reason };
+  }
+
+  return { level: 'normal', reason: '' };
+};
+
+const sortNotifications = (items = []) => {
+  return [...items].sort((a, b) => {
+    const priorityScore = (value) => (value === 'high' ? 1 : 0);
+    const pa = priorityScore(a.priorityLevel);
+    const pb = priorityScore(b.priorityLevel);
+    if (pb !== pa) return pb - pa;
+    const ta = new Date(a.timestamp || 0).getTime();
+    const tb = new Date(b.timestamp || 0).getTime();
+    return tb - ta;
+  });
+};
+
 const toNotification = (request = {}) => ({
+  ...(() => {
+    const p = getPriorityInfo(request);
+    return { priorityLevel: p.level, priorityReason: p.reason };
+  })(),
   id: request.id,
   pnr: request.pnr,
   trainNumber: request.trainNumber,
   boardingStation: request.boardingStation || request.missedStation || 'N/A',
   catchStation: request.catchStation || 'N/A',
+  eta: request.eta || '-',
   message: request.message || '',
   timestamp: request.timestamp || request.createdAt || new Date().toISOString(),
   read: false
 });
 
+const parseQrPayload = (payload = '') => {
+  const pnrMatch = payload.match(/PNR:\s*([0-9]{6,12})/i);
+  const trainMatch = payload.match(/Train:\s*([A-Z0-9]+)/i);
+  const catchMatch = payload.match(/Catch At:\s*([A-Z0-9\s]+)/i);
+
+  const passengers = [];
+  payload.split('\n').forEach((line) => {
+    const m = line.match(/^\s*\d+\.\s*([^,]+),\s*(\d+)([A-Z])?\s*\|\s*([A-Z0-9-]+)/i);
+    if (m) {
+      const seatText = m[4] || '';
+      const [coachPart, seatPart] = seatText.split('-');
+      passengers.push({
+        name: m[1]?.trim() || '',
+        age: m[2] || '',
+        gender: m[3] || '',
+        coach: coachPart || seatText,
+        seat: seatPart || seatText
+      });
+    }
+  });
+
+  return {
+    pnr: pnrMatch?.[1] || '',
+    trainNumber: trainMatch?.[1] || '',
+    catchAt: catchMatch?.[1]?.trim() || '',
+    passengers,
+    raw: payload
+  };
+};
+
 const TteDashboard = () => {
+  const MotionDiv = motion.div;
   const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [socket, setSocket] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [notifications, setNotifications] = useState([]);
@@ -80,6 +167,35 @@ const TteDashboard = () => {
   const streamRef = useRef(null);
   const scanLoopRef = useRef(null);
   const detectorRef = useRef(null);
+  const socketRef = useRef(null);
+  const requestsRef = useRef([]);
+  const actionQueueRef = useRef([]);
+
+  const persistQueue = useCallback((queue = []) => {
+    actionQueueRef.current = queue;
+    window.localStorage.setItem(TTE_QUEUE_KEY, JSON.stringify(queue));
+  }, []);
+
+  const enqueueSocketAction = useCallback((event, payload = {}) => {
+    const next = [...actionQueueRef.current, { event, payload }];
+    persistQueue(next);
+  }, [persistQueue]);
+
+  const flushQueue = useCallback(() => {
+    if (!socketRef.current?.connected || actionQueueRef.current.length === 0) return;
+    actionQueueRef.current.forEach((item) => {
+      socketRef.current.emit(item.event, item.payload);
+    });
+    persistQueue([]);
+  }, [persistQueue]);
+
+  const emitOrQueue = useCallback((event, payload = {}) => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit(event, payload);
+      return;
+    }
+    enqueueSocketAction(event, payload);
+  }, [enqueueSocketAction]);
 
   const cleanupScanner = () => {
     if (scanLoopRef.current) {
@@ -97,39 +213,9 @@ const TteDashboard = () => {
     detectorRef.current = null;
   };
 
-  const parseQrPayload = (payload = '') => {
-    const pnrMatch = payload.match(/PNR:\s*([0-9]{6,12})/i);
-    const trainMatch = payload.match(/Train:\s*([A-Z0-9]+)/i);
-    const catchMatch = payload.match(/Catch At:\s*([A-Z0-9\s]+)/i);
-
-    const passengers = [];
-    payload.split('\n').forEach((line) => {
-      const m = line.match(/^\s*\d+\.\s*([^,]+),\s*(\d+)([A-Z])?\s*\|\s*([A-Z0-9-]+)/i);
-      if (m) {
-        const seatText = m[4] || '';
-        const [coachPart, seatPart] = seatText.split('-');
-        passengers.push({
-          name: m[1]?.trim() || '',
-          age: m[2] || '',
-          gender: m[3] || '',
-          coach: coachPart || seatText,
-          seat: seatPart || seatText
-        });
-      }
-    });
-
-    return {
-      pnr: pnrMatch?.[1] || '',
-      trainNumber: trainMatch?.[1] || '',
-      catchAt: catchMatch?.[1]?.trim() || '',
-      passengers,
-      raw: payload
-    };
-  };
-
-  const handleScanSuccess = (payload = '') => {
+  const handleScanSuccess = useCallback((payload = '') => {
     const parsed = parseQrPayload(payload);
-    const matchingReq = requests.find(r => r.pnr === parsed.pnr);
+    const matchingReq = requestsRef.current.find(r => r.pnr === parsed.pnr);
     setScanResult({
       ...parsed,
       status: matchingReq?.status || 'Not Found',
@@ -137,10 +223,39 @@ const TteDashboard = () => {
       detectedAt: new Date().toISOString()
     });
     setScannerActive(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    requestsRef.current = requests;
+  }, [requests]);
 
   useEffect(() => {
      const fetchInitialRequests = async () => {
+         const cached = window.localStorage.getItem(TTE_CACHE_KEY);
+         if (cached) {
+           try {
+             const parsed = JSON.parse(cached);
+             if (Array.isArray(parsed) && parsed.length > 0) {
+               const normalizedCached = parsed.map(normalizeRequest);
+               setRequests(normalizedCached);
+             }
+           } catch {
+             // ignore bad cache
+           }
+         }
+
+         const queued = window.localStorage.getItem(TTE_QUEUE_KEY);
+         if (queued) {
+           try {
+             const parsedQueue = JSON.parse(queued);
+             if (Array.isArray(parsedQueue)) {
+               actionQueueRef.current = parsedQueue;
+             }
+           } catch {
+             actionQueueRef.current = [];
+           }
+         }
+
          try {
              const data = await getTteRequests();
              const normalized = Array.isArray(data) ? data.map(normalizeRequest) : [];
@@ -148,7 +263,7 @@ const TteDashboard = () => {
              const pendingNotifs = normalized
                .filter(r => r.status === 'Pending')
                .map(toNotification);
-             setNotifications(pendingNotifs);
+             setNotifications(sortNotifications(pendingNotifs));
          } catch {
              // silently fail
          }
@@ -160,15 +275,38 @@ const TteDashboard = () => {
      
      const onNewRequest = (req) => {
          const normalizedReq = normalizeRequest(req);
+         const nextNotif = toNotification(normalizedReq);
          setRequests(prev => [normalizedReq, ...prev]);
-         setNotifications(prev => [
-           toNotification(normalizedReq),
+         setNotifications(prev => sortNotifications([
+           nextNotif,
            ...prev
-         ]);
+         ]));
+         if (nextNotif.priorityLevel === 'high') {
+           setShowNotifications(true);
+         }
      };
 
      newSocket.on('new_request', onNewRequest);
      newSocket.on('tte_request_received', onNewRequest);
+
+     newSocket.on('connect', () => {
+       flushQueue();
+     });
+
+     newSocket.on('tte_request_updated', (req) => {
+       const normalizedReq = normalizeRequest(req);
+       setRequests(prev => {
+         const exists = prev.some((r) => r.id === normalizedReq.id);
+         if (!exists) return [normalizedReq, ...prev];
+         return prev.map((r) => (r.id === normalizedReq.id ? { ...r, ...normalizedReq } : r));
+       });
+     });
+
+     newSocket.on('request_cancelled', (data) => {
+       setRequests(prev => prev.map((r) =>
+         r.id === data?.id || r.pnr === data?.pnr ? { ...r, status: 'Cancelled' } : r
+       ));
+     });
 
      newSocket.on('request_marked_present', (data) => {
          setRequests(prev => prev.map(r => 
@@ -176,9 +314,16 @@ const TteDashboard = () => {
          ));
      });
 
-     setSocket(newSocket);
-     return () => newSocket.disconnect();
-  }, []);
+     socketRef.current = newSocket;
+     return () => {
+       newSocket.disconnect();
+       socketRef.current = null;
+     };
+  }, [flushQueue]);
+
+  useEffect(() => {
+    window.localStorage.setItem(TTE_CACHE_KEY, JSON.stringify(requests));
+  }, [requests]);
 
   // Close notification dropdown on outside click
   useEffect(() => {
@@ -216,7 +361,7 @@ const TteDashboard = () => {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
         }
-      } catch (err) {
+      } catch {
         setScanError('Unable to access camera. Please allow camera permission on this page.');
         setScannerActive(false);
         return;
@@ -237,7 +382,7 @@ const TteDashboard = () => {
             handleScanSuccess(codes[0].rawValue);
             return;
           }
-        } catch (err) {
+        } catch {
           // keep scanning even if a frame fails
         }
         scanLoopRef.current = requestAnimationFrame(scan);
@@ -251,7 +396,7 @@ const TteDashboard = () => {
       cancelled = true;
       cleanupScanner();
     };
-  }, [scannerActive]);
+  }, [scannerActive, handleScanSuccess]);
 
   const pendingRequests = requests.filter(r => r.status === 'Pending');
   const approvedRequests = requests.filter(r => r.status === 'Approved');
@@ -260,8 +405,8 @@ const TteDashboard = () => {
 
   const handleAccept = (id) => {
     const req = requests.find(r => r.id === id);
-    if(req && socket) {
-        socket.emit('tte_approve', { pnr: req.pnr });
+    if(req) {
+      emitOrQueue('tte_approve', { pnr: req.pnr, id: req.id, boardingStation: req.boardingStation });
     }
     setRequests(prev => prev.map(r => 
       r.id === id ? { ...r, status: 'Approved' } : r
@@ -269,6 +414,14 @@ const TteDashboard = () => {
   };
 
   const handleReject = (id) => {
+    const req = requests.find(r => r.id === id);
+    if (req) {
+      emitOrQueue('tte_reject', {
+        id: req.id,
+        pnr: req.pnr,
+        boardingStation: req.boardingStation || req.missedStation || 'N/A'
+      });
+    }
     setRequests(prev => prev.map(req => 
       req.id === id ? { ...req, status: 'Rejected' } : req
     ));
@@ -276,8 +429,8 @@ const TteDashboard = () => {
 
   const handleMarkPresent = (id) => {
     const req = requests.find(r => r.id === id);
-    if (req && socket) {
-      socket.emit('tte_mark_present', { pnr: req.pnr });
+    if (req) {
+      emitOrQueue('tte_mark_present', { pnr: req.pnr, id: req.id, boardingStation: req.boardingStation });
     }
     setRequests(prev => prev.map(req => 
       req.id === id ? { ...req, status: 'Present' } : req
@@ -293,8 +446,8 @@ const TteDashboard = () => {
       return;
     }
 
-    if (scanResult.pnr && socket) {
-      socket.emit('tte_mark_present', { pnr: scanResult.pnr });
+    if (scanResult.pnr) {
+      emitOrQueue('tte_mark_present', { pnr: scanResult.pnr });
     }
 
     if (scanResult.pnr) {
@@ -649,7 +802,7 @@ const TteDashboard = () => {
 
       <div className="staff-grid">
         {mockStaff.map((s, i) => (
-          <motion.div 
+          <MotionDiv 
             key={i} 
             className="staff-card"
             initial={{ opacity: 0, y: 20 }}
@@ -668,7 +821,7 @@ const TteDashboard = () => {
                 <a href={`mailto:${s.email}`}><Mail size={14} /> {s.email}</a>
               </div>
             </div>
-          </motion.div>
+          </MotionDiv>
         ))}
       </div>
     </>
@@ -784,7 +937,7 @@ const TteDashboard = () => {
                       notifications.map(n => (
                         <div
                           key={n.id}
-                          className={`notif-item ${!n.read ? 'notif-unread' : ''}`}
+                          className={`notif-item ${!n.read ? 'notif-unread' : ''} ${n.priorityLevel === 'high' ? 'notif-priority' : ''}`}
                           onClick={() => {
                             setNotifications(prev => prev.map(x => x.id === n.id ? {...x, read: true} : x));
                             switchTab('requests');
@@ -795,9 +948,11 @@ const TteDashboard = () => {
                             <ShieldAlert size={16} />
                           </div>
                           <div className="notif-content">
-                            <p className="notif-title">New Missed Train Request</p>
+                            <p className="notif-title">{n.priorityLevel === 'high' ? 'Priority Catch Window Alert' : 'New Missed Train Request'}</p>
                             <p className="notif-detail">PNR: {n.pnr} • Train {n.trainNumber}</p>
                             <p className="notif-detail">{n.boardingStation} → {n.catchStation}</p>
+                            {n.priorityReason && <p className="notif-detail">{n.priorityReason}</p>}
+                            {n.eta && n.eta !== '-' && <p className="notif-detail">ETA: {n.eta}</p>}
                             {n.message && <p className="notif-msg">"{n.message}"</p>}
                           </div>
                           <span className="notif-time">{formatTime(n.timestamp)}</span>
@@ -815,7 +970,7 @@ const TteDashboard = () => {
         {/* Dynamic Tab Content */}
         <div className="dashboard-content">
           <AnimatePresence mode="wait">
-            <motion.div
+            <MotionDiv
               key={activeTab}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -823,7 +978,7 @@ const TteDashboard = () => {
               transition={{ duration: 0.2 }}
             >
               {renderContent()}
-            </motion.div>
+            </MotionDiv>
           </AnimatePresence>
         </div>
       </main>
