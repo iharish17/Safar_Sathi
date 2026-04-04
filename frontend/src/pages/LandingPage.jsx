@@ -43,7 +43,7 @@ const LandingPage = () => {
             <div className="hero-badge badge badge-info">Introducing Delayed Passenger System</div>
             <h1 className="hero-title">
               Missed Your Train? <br/>
-              <span className="text-accent">Catch It Later.</span>
+              <span className="text-accent">"Catch It Later"</span>
             </h1>
             <p className="hero-subtitle">
               Don't worry about being marked "No Show". Safar Sathi helps you find the next catchable station and securely notifies the TTE.

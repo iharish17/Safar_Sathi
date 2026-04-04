@@ -7,6 +7,7 @@ module.exports = (trains) => {
   const MAX_ALT_WAIT_MINS = 6 * 60;
   const MAX_EARLY_ARRIVAL_MINS = 6 * 60;
   const DAY_MINS = 24 * 60;
+  const DAY_KEYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   const isSchedulableTime = (value) => {
     const text = String(value || '').trim().toLowerCase();
     return text && text !== 'source' && text !== 'destination';
@@ -20,6 +21,16 @@ module.exports = (trains) => {
     if (fromClockMins === null || toClockMins === null) return null;
     const diff = toClockMins - fromClockMins;
     return diff >= 0 ? diff : diff + DAY_MINS;
+  };
+  const getDayKeyForOffset = (offset = 0) => {
+    const today = new Date();
+    today.setDate(today.getDate() + offset);
+    return DAY_KEYS[today.getDay()];
+  };
+  const trainRunsOnOffsetDay = (train, offset = 0) => {
+    if (!train?.runningDays || typeof train.runningDays !== 'object') return true;
+    const dayKey = getDayKeyForOffset(offset);
+    return Boolean(train.runningDays[dayKey]);
   };
 
   router.get('/', (req, res) => {
@@ -98,6 +109,9 @@ module.exports = (trains) => {
         const altDepClockMins = hhmmToMinutes(altCurrentStop.departs);
         const waitMins = minutesUntilNextOccurrence(originalDepClockMins, altDepClockMins);
         const depAfterMissedPoint = waitMins !== null && waitMins > 0;
+        const waitDayOffset = altDepClockMins < originalDepClockMins ? 1 : 0;
+        const isRunningToday = trainRunsOnOffsetDay(altTrain, waitDayOffset);
+        const runningDayKey = getDayKeyForOffset(waitDayOffset);
 
         if (!depAfterMissedPoint || waitMins > MAX_ALT_WAIT_MINS) return null;
 
@@ -137,6 +151,8 @@ module.exports = (trains) => {
             originalDepartureDayAtCatch: candidate.stop.day,
             catchRouteIndex: candidate.routeIndex,
             leadMins,
+            isRunningToday,
+            runningDayKey,
             isRunningLate: true,
             delayMins: Math.floor(Math.random() * 60) + 15
           };
@@ -148,7 +164,7 @@ module.exports = (trains) => {
       for (const altTrain of trains) {
         if (altTrain.trainNumber === trainNumber) continue;
         const match = findEarliestCatchForAltTrain(altTrain);
-        if (match) alternateTrains.push(match);
+        if (match && match.isRunningToday) alternateTrains.push(match);
       }
 
       alternateTrains.sort((a, b) => a.catchRouteIndex - b.catchRouteIndex);

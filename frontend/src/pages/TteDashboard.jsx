@@ -899,7 +899,6 @@ const TteDashboard = () => {
              </button>
              <div>
                <h1 className="header-page-title">{tabTitles[activeTab]}</h1>
-               <p className="text-xs" style={{color:'var(--color-text-secondary)'}}>Train 12302 • HWH Rajdhani</p>
              </div>
           </div>
           <div className="header-actions">

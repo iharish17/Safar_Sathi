@@ -15,7 +15,7 @@ const mockPnrs = {
     source: "JAT",
     destination: "TATA",
     passengers: [
-      { name: 'Suresh Raina', age: 35, gender: 'M', coach: 'B2', seat: '41', status: 'CNF' }
+      { name: 'Harish Kumar', age: 18, gender: 'M', coach: 'B2', seat: '41', status: 'CNF' }
     ]
   },
   "1234567890": {

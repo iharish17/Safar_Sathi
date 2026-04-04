@@ -184,6 +184,8 @@ const getTravelDurationMinutes = (train) => {
 };
 
 const getRecommendationScore = (train) => {
+    if (train?.isRunningToday === false) return Number.NEGATIVE_INFINITY;
+
     const arrivalLeadMins = getArrivalLeadMinutes(train);
     const durationMins = getTravelDurationMinutes(train);
     const delayMins = Number(train.delayMins) || 0;
@@ -205,10 +207,18 @@ const getRecommendationScore = (train) => {
 const getRecommendedTrainIndex = (alternateTrains = []) => {
     if (!Array.isArray(alternateTrains) || alternateTrains.length === 0) return -1;
 
-    let bestIndex = 0;
+    const runningTodayIndexes = alternateTrains
+        .map((train, index) => ({ train, index }))
+        .filter(({ train }) => train?.isRunningToday !== false)
+        .map(({ index }) => index);
+
+    if (runningTodayIndexes.length === 0) return -1;
+
+    let bestIndex = runningTodayIndexes[0];
     let bestScore = Number.NEGATIVE_INFINITY;
 
-    alternateTrains.forEach((train, idx) => {
+    runningTodayIndexes.forEach((idx) => {
+        const train = alternateTrains[idx];
         const score = getRecommendationScore(train);
         if (score > bestScore) {
             bestScore = score;
@@ -258,6 +268,13 @@ const stationLabelsMatch = (routeStation = '', selectedStation = '') => {
     return routeCode && selectedCode && routeCode === selectedCode;
 };
 
+const openExternalSearch = (query = '') => {
+    if (typeof window === 'undefined') return;
+    const q = String(query || '').trim();
+    if (!q) return;
+    window.open(`https://www.google.com/search?q=${encodeURIComponent(q)}`, '_blank', 'noopener,noreferrer');
+};
+
 const MissedTrainCalculator = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -276,6 +293,9 @@ const MissedTrainCalculator = () => {
     const [tteMessage, setTteMessage] = useState('');
     const [requestStatus, setRequestStatus] = useState('idle');
     const [activeRequestId, setActiveRequestId] = useState(null);
+    const [selectedCatchStation, setSelectedCatchStation] = useState('');
+    const [showStationSuggestions, setShowStationSuggestions] = useState(false);
+    const [stationSuggestionIndex, setStationSuggestionIndex] = useState(-1);
     const [socket, setSocket] = useState(null);
 
     const pushPassengerNotification = (message, tone = 'info') => {
@@ -288,6 +308,61 @@ const MissedTrainCalculator = () => {
             },
             ...prev,
         ].slice(0, 5));
+    };
+
+    const routeStations = Array.from(new Set(
+        (pnrDetails?.route || [])
+            .map((stop) => String(stop?.stationName || '').trim())
+            .filter(Boolean)
+    ));
+    const boardingQuery = String(boarding || '').trim().toUpperCase();
+    const stationSuggestions = boardingQuery
+        ? routeStations
+            .filter((station) => station.toUpperCase().includes(boardingQuery))
+            .slice(0, 8)
+        : [];
+
+    const selectBoardingStation = (station) => {
+        setBoarding(station);
+        setShowStationSuggestions(false);
+        setStationSuggestionIndex(-1);
+    };
+
+    const handleBoardingInputChange = (event) => {
+        const value = event.target.value;
+        setBoarding(value);
+        setShowStationSuggestions(Boolean(String(value || '').trim()));
+        setStationSuggestionIndex(-1);
+    };
+
+    const handleBoardingInputKeyDown = (event) => {
+        if (!showStationSuggestions || stationSuggestions.length === 0) return;
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            setStationSuggestionIndex((prev) => (prev + 1) % stationSuggestions.length);
+            return;
+        }
+
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            setStationSuggestionIndex((prev) => {
+                if (prev <= 0) return stationSuggestions.length - 1;
+                return prev - 1;
+            });
+            return;
+        }
+
+        if (event.key === 'Enter' && stationSuggestionIndex >= 0) {
+            event.preventDefault();
+            selectBoardingStation(stationSuggestions[stationSuggestionIndex]);
+            return;
+        }
+
+        if (event.key === 'Escape') {
+            setShowStationSuggestions(false);
+            setStationSuggestionIndex(-1);
+        }
     };
 
     useEffect(() => {
@@ -306,6 +381,8 @@ const MissedTrainCalculator = () => {
             setError(null);
             setPnr(routePnr);
             setBoarding(routeBoarding);
+            setShowStationSuggestions(false);
+            setStationSuggestionIndex(-1);
 
             try {
                 const data = await getPnrDetails(routePnr);
@@ -346,6 +423,9 @@ const MissedTrainCalculator = () => {
                 if (latestRequest?.message) {
                     setTteMessage(String(latestRequest.message));
                 }
+                if (latestRequest?.catchStation) {
+                    setSelectedCatchStation(String(latestRequest.catchStation));
+                }
 
                 updateRecentSearches((prev) => prev.map((item) => (
                     String(item?.pnr || '').trim() === routePnr && stationLabelsMatch(item?.boarding || '', routeBoarding)
@@ -381,7 +461,8 @@ const MissedTrainCalculator = () => {
 
     const recommendedTrainIndex = getRecommendedTrainIndex(result?.alternateTrains || []);
     const recommendedTrain = recommendedTrainIndex >= 0 ? result?.alternateTrains?.[recommendedTrainIndex] : null;
-    const preferredCatchStation = getPreferredCatchStation(recommendedTrain || result?.alternateTrains?.[0], result);
+    const firstRunningTrain = (result?.alternateTrains || []).find((train) => train?.isRunningToday !== false) || null;
+    const preferredCatchStation = getPreferredCatchStation(recommendedTrain || firstRunningTrain || result?.alternateTrains?.[0], result);
     const orderedAlternateTrains = (() => {
         const trains = result?.alternateTrains || [];
         if (!Array.isArray(trains) || trains.length === 0) return [];
@@ -394,6 +475,46 @@ const MissedTrainCalculator = () => {
             ...withIndex.filter((_, index) => index !== recommendedTrainIndex)
         ];
     })();
+    const catchStationChoices = (() => {
+        const trains = result?.alternateTrains || [];
+        const byStation = new Map();
+
+        trains.forEach((train) => {
+            const station = String(getPreferredCatchStation(train, result, '') || '').trim();
+            if (!station) return;
+
+            const leadMins = getArrivalLeadMinutes(train);
+            const ranking = Number.isFinite(leadMins) ? leadMins : Number.NEGATIVE_INFINITY;
+            const current = byStation.get(station);
+
+            if (!current || ranking > current.ranking) {
+                byStation.set(station, { station, ranking });
+            }
+        });
+
+        return Array.from(byStation.values())
+            .sort((a, b) => b.ranking - a.ranking)
+            .map((item) => item.station);
+    })();
+    const effectiveCatchStation = catchStationChoices.find((station) => stationLabelsMatch(station, selectedCatchStation))
+        || preferredCatchStation;
+    const trainForSelectedCatch = (result?.alternateTrains || []).find((train) => {
+        const trainCatchStation = getPreferredCatchStation(train, result, '');
+        return stationLabelsMatch(trainCatchStation, effectiveCatchStation);
+    }) || recommendedTrain || firstRunningTrain || result?.alternateTrains?.[0] || null;
+
+    useEffect(() => {
+        if (!Array.isArray(catchStationChoices) || catchStationChoices.length === 0) {
+            if (selectedCatchStation) setSelectedCatchStation('');
+            return;
+        }
+
+        const hasSelectedOption = catchStationChoices.some((station) => stationLabelsMatch(station, selectedCatchStation));
+        if (hasSelectedOption) return;
+
+        const preferredOption = catchStationChoices.find((station) => stationLabelsMatch(station, preferredCatchStation));
+        setSelectedCatchStation(preferredOption || catchStationChoices[0]);
+    }, [catchStationChoices, preferredCatchStation, selectedCatchStation]);
 
     useEffect(() => {
         const initialRecent = safeReadRecentSearches();
@@ -425,6 +546,9 @@ const MissedTrainCalculator = () => {
                 setActiveRequestId(nextPhase === 'idle' ? null : (latestRequest?.id || null));
                 if (latestRequest?.message && currentStatus === 'pending') {
                     setTteMessage(String(latestRequest.message));
+                }
+                if (latestRequest?.catchStation) {
+                    setSelectedCatchStation(String(latestRequest.catchStation));
                 }
                 updateRecentSearches((prev) => mergeStatusIntoRecent(prev, safeRequests));
             } catch {
@@ -545,6 +669,9 @@ const MissedTrainCalculator = () => {
         setResult(null);
         setRequestStatus('idle');
         setActiveRequestId(null);
+        setSelectedCatchStation('');
+        setShowStationSuggestions(false);
+        setStationSuggestionIndex(-1);
 
         try {
             const catchStatus = await checkCatchStatus(pnrDetails.trainNumber, boarding, boarding);
@@ -596,7 +723,7 @@ const MissedTrainCalculator = () => {
         setActiveRequestId(requestId);
 
         const selectedCatchIndex = (result.nextStations || []).findIndex((station) =>
-            stationLabelsMatch(station?.stationName, preferredCatchStation)
+            stationLabelsMatch(station?.stationName, effectiveCatchStation)
         );
 
         const stationsGapForRequest = selectedCatchIndex >= 0
@@ -608,8 +735,8 @@ const MissedTrainCalculator = () => {
             pnr,
             trainNumber: result.trainNumber,
             boardingStation: boarding,
-            catchStation: preferredCatchStation,
-            eta: recommendedTrain?.originalDepartureAtCatch || recommendedTrain?.arrivalTime || result?.lastValidStation?.departs || '-',
+            catchStation: effectiveCatchStation,
+            eta: trainForSelectedCatch?.originalDepartureAtCatch || trainForSelectedCatch?.arrivalTime || result?.lastValidStation?.departs || '-',
             stationsGap: stationsGapForRequest,
             totalStations: result.totalStations,
             skipLimit: result.skipLimit,
@@ -622,7 +749,7 @@ const MissedTrainCalculator = () => {
             pnr,
             trainNumber: result?.trainNumber,
             boarding,
-            catchStation: preferredCatchStation,
+            catchStation: effectiveCatchStation,
             requestStatus: 'pending',
         }));
     };
@@ -650,7 +777,7 @@ const MissedTrainCalculator = () => {
             pnr,
             trainNumber: result?.trainNumber,
             boarding,
-            catchStation: preferredCatchStation,
+            catchStation: effectiveCatchStation,
             requestStatus: 'cancelled',
         }));
     };
@@ -665,6 +792,8 @@ const MissedTrainCalculator = () => {
         setBoarding(String(entry?.boarding || '').trim());
         setResult(null);
         setPnrChecked(false);
+        setShowStationSuggestions(false);
+        setStationSuggestionIndex(-1);
 
         try {
             const data = await getPnrDetails(pickedPnr);
@@ -688,6 +817,9 @@ const MissedTrainCalculator = () => {
             setActiveRequestId(nextPhase === 'idle' ? null : (latestRequest?.id || null));
             if (latestRequest?.message) {
                 setTteMessage(String(latestRequest.message));
+            }
+            if (latestRequest?.catchStation) {
+                setSelectedCatchStation(String(latestRequest.catchStation));
             }
             updateRecentSearches((prev) => prev.map((item) => (
                 String(item?.pnr || '').trim() === pickedPnr && stationLabelsMatch(item?.boarding || '', savedBoarding)
@@ -780,7 +912,7 @@ const MissedTrainCalculator = () => {
                             <div>
                                 <label className="calculator-label">PNR Number</label>
                                 <input required type="text" maxLength={10} value={pnr} onChange={e=>setPnr(e.target.value)}
-                                    placeholder="e.g., 1234123412" className="input-field font-bold" />
+                                    placeholder="Enter your PNR" className="input-field font-bold" />
                             </div>
                             <div className="calculator-actions">
                               <button disabled={loading} type="submit" className="btn btn-primary">
@@ -804,10 +936,42 @@ const MissedTrainCalculator = () => {
                                   ))}
                                </div>
                             </div>
-                            <div>
+                            <div className="station-suggest-wrap">
                                 <label className="calculator-label">Missed Station (Code)</label>
-                                <input required type="text" value={boarding} onChange={e=>setBoarding(e.target.value)}
+                                <input
+                                    required
+                                    type="text"
+                                    value={boarding}
+                                    onChange={handleBoardingInputChange}
+                                    onFocus={() => setShowStationSuggestions(Boolean(boardingQuery))}
+                                    onBlur={() => {
+                                        window.setTimeout(() => {
+                                            setShowStationSuggestions(false);
+                                            setStationSuggestionIndex(-1);
+                                        }, 120);
+                                    }}
+                                    onKeyDown={handleBoardingInputKeyDown}
                                     placeholder="e.g., JAT for Jammu Tawi" className="input-field font-bold" />
+                                {showStationSuggestions && stationSuggestions.length > 0 && (
+                                    <div className="station-suggest-list" role="listbox" aria-label="Route station suggestions">
+                                        {stationSuggestions.map((station, index) => (
+                                            <button
+                                                key={station}
+                                                type="button"
+                                                className={`station-suggest-item ${index === stationSuggestionIndex ? 'station-suggest-item-active' : ''}`}
+                                                onMouseDown={(event) => {
+                                                    event.preventDefault();
+                                                    selectBoardingStation(station);
+                                                }}
+                                            >
+                                                {station}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                {showStationSuggestions && boardingQuery && stationSuggestions.length === 0 && (
+                                    <p className="station-suggest-empty">No matching stations found on this train route.</p>
+                                )}
                             </div>
                             <div className="calculator-actions">
                               <button disabled={loading} type="submit" className="btn btn-primary">
@@ -882,8 +1046,10 @@ const MissedTrainCalculator = () => {
                                                 Travel time: {formatTravelTime(train.departureTime, train.departureDay, train.arrivalTime, train.arrivalDay)}
                                             </p>
                                         </div>
-                                        <div className="arrival-compare-copy" role="status" aria-live="polite">
-                                            {getArrivalComparisonText(train)}
+                                        <div className="alt-train-meta-stack">
+                                            <div className="arrival-compare-copy" role="status" aria-live="polite">
+                                                {getArrivalComparisonText(train)}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -930,18 +1096,73 @@ const MissedTrainCalculator = () => {
                         ))
                     )}
 
+                    {(!result.alternateTrains || result.alternateTrains.length === 0) && (
+                        <div className="no-alt-options-card" role="status" aria-live="polite">
+                            <h3>No alternate trains found for this station</h3>
+                            <p>
+                                You can still continue your trip using other transport options and then board at a later station.
+                            </p>
+                            <div className="no-alt-options-grid">
+                                <button
+                                    type="button"
+                                    className="btn btn-outline no-alt-option-btn"
+                                    onClick={() => openExternalSearch(`Bus from ${boarding} railway station`) }
+                                >
+                                    Check Bus Options
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-outline no-alt-option-btn"
+                                    onClick={() => openExternalSearch(`Cab from ${boarding} railway station`) }
+                                >
+                                    Check Cab / Taxi
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-outline no-alt-option-btn"
+                                    onClick={() => navigate('/search')}
+                                >
+                                    Search Other Trains
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-outline no-alt-option-btn"
+                                    onClick={() => setBoarding('')}
+                                >
+                                    Try Another Station
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {result.alternateTrains && result.alternateTrains.length > 0 && (
                     <div className="tte-card">
-                        <h3 className="font-black text-xl">TTE Boarding Protection</h3>
+                        <h3 className="font-black text-xl">Ticket Protection</h3>
                         
                         {requestStatus === 'idle' && (
                             <>
                                 <p className="mb-4 font-medium text-center">
-                                    Send a direct alert to the TTE of {result.trainNumber} to hold your seat until {preferredCatchStation}.
+                                    Send a direct alert to the TTE of {result.trainNumber} to hold your seat until {effectiveCatchStation}.
                                 </p>
+                                {catchStationChoices.length > 1 && (
+                                    <div className="catch-station-picker">
+                                        <label className="catch-station-label">Choose boarding station for TTE request</label>
+                                        <select
+                                            className="catch-station-select"
+                                            value={selectedCatchStation}
+                                            onChange={(e) => setSelectedCatchStation(e.target.value)}
+                                        >
+                                            {catchStationChoices.map((station) => (
+                                                <option key={station} value={station}>{station}</option>
+                                            ))}
+                                        </select>
+                                        <p className="catch-station-hint">TTE approval/rejection will be processed for this selected station.</p>
+                                    </div>
+                                )}
                                 <textarea 
                                     value={tteMessage} 
                                     onChange={e=>setTteMessage(e.target.value)}
-                                    placeholder="Optional message to TTE (e.g., Taking connecting train, arriving at 14:00. Please do not mark No-Show.)"
+                                    placeholder="Optional message to TTE "
                                     className="input-field mb-4"
                                     rows="3"
                                 />
@@ -956,6 +1177,7 @@ const MissedTrainCalculator = () => {
                                 <div className="animate-pulse text-primary font-bold text-lg mb-3">
                                     ⏳ Request sent! Waiting for TTE Approval...
                                 </div>
+                                <p className="catch-station-current">Requested boarding station: <strong>{effectiveCatchStation}</strong></p>
                                 <textarea 
                                     value={tteMessage}
                                     onChange={e=>setTteMessage(e.target.value)}
@@ -979,7 +1201,7 @@ const MissedTrainCalculator = () => {
                                 `${i+1}. ${p.name}, ${p.age}${p.gender} | ${p.coach}-${p.seat}`
                             ).join('\n') || '';
                             
-                            const qrPayload = `SAFAR SATHI - CATCH PASS\n========================\nPNR: ${pnrDetails?.pnr}\nTrain: ${pnrDetails?.trainNumber}\nCatch At: ${preferredCatchStation}\n========================\nPassengers:\n${passengersText}`;
+                            const qrPayload = `SAFAR SATHI - CATCH PASS\n========================\nPNR: ${pnrDetails?.pnr}\nTrain: ${pnrDetails?.trainNumber}\nCatch At: ${effectiveCatchStation}\n========================\nPassengers:\n${passengersText}`;
 
                             return (
                                 <div className="tte-approved">
@@ -997,6 +1219,7 @@ const MissedTrainCalculator = () => {
                             );
                         })()}
                     </div>
+                    )}
 
                 </div>
             )}
