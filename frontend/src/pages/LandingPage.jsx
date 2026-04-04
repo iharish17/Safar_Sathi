@@ -59,7 +59,7 @@ function LandingPage() {
               </MotionButton>
               <MotionButton
                 className="btn btn-outline hero-cta group bg-white border-primary text-primary interactive-lift"
-                onClick={() => navigate('/missed-train')}
+                onClick={() => navigate('/search')}
                 whileHover={{ y: -2 }}
                 whileTap={{ scale: 0.98 }}
               >
