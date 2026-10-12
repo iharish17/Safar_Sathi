@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getPnrDetails, checkCatchStatus, getTteRequests } from '../services/api';
-import { AlertCircle, ShieldCheck, CheckCircle, Home, ChevronRight, Train, MapPin, ArrowRight, X } from 'lucide-react';
+import { AlertCircle, ShieldCheck, CheckCircle, Home, ChevronRight, Train, MapPin, ArrowRight, X, LoaderCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { io } from 'socket.io-client';
 import '../styles/MissedTrainCalculator.css';
@@ -650,8 +650,9 @@ const MissedTrainCalculator = () => {
                 requestStatus: 'unknown',
             }));
             navigate(`/missed-train/pnr/${pnr}`);
-        } catch {
-            setError('Failed to fetch PNR or Invalid PNR.');
+        } catch (err) {
+            const message = err?.response?.data?.error || 'Failed to fetch PNR or Invalid PNR.';
+            setError(message);
         } finally {
             setLoading(false);
         }
@@ -921,6 +922,7 @@ const MissedTrainCalculator = () => {
                             </div>
                             <div className="calculator-actions">
                               <button disabled={loading} type="submit" className="btn btn-primary">
+                                  {loading && <LoaderCircle size={18} className="btn-loading-icon" aria-hidden="true" />}
                                   {loading ? 'Checking...' : 'Check PNR'}
                               </button>
                             </div>
@@ -980,6 +982,7 @@ const MissedTrainCalculator = () => {
                             </div>
                             <div className="calculator-actions">
                               <button disabled={loading} type="submit" className="btn btn-primary">
+                                  {loading && <LoaderCircle size={18} className="btn-loading-icon" aria-hidden="true" />}
                                   {loading ? 'Analyzing...' : 'Find Catchable Route'}
                               </button>
                             </div>

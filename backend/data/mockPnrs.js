@@ -27,6 +27,15 @@ const mockPnrs = {
       { name: 'Harish Kumar', age: 18, gender: 'M', coach: 'B2', seat: '41', status: 'CNF' }
     ]
   },
+  "5475698745": {
+    pnr: "5475698745",
+    trainNumber: "01211",
+    source: "AKOLA JN",
+    destination: "NASIK ROAD",
+    passengers: [
+      { name: 'Harish Kumar', age: 18, gender: 'M', coach: 'B2', seat: '41', status: 'CNF' }
+    ]
+  },
   "1234567890": {
     pnr: "1234567890",
     trainNumber: "01209",
