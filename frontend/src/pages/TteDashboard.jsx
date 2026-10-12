@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -198,6 +198,20 @@ const TteDashboard = () => {
     enqueueSocketAction(event, payload);
   }, [enqueueSocketAction]);
 
+  const syncRequestsFromServer = useCallback(async () => {
+    try {
+      const data = await getTteRequests();
+      const normalized = Array.isArray(data) ? data.map(normalizeRequest) : [];
+      setRequests(normalized);
+      const pendingNotifs = normalized
+        .filter(r => r.status === 'Pending')
+        .map(toNotification);
+      setNotifications(sortNotifications(pendingNotifs));
+    } catch {
+      // keep current local view if sync fails
+    }
+  }, []);
+
   const cleanupScanner = () => {
     if (scanLoopRef.current) {
       cancelAnimationFrame(scanLoopRef.current);
@@ -257,17 +271,7 @@ const TteDashboard = () => {
            }
          }
 
-         try {
-             const data = await getTteRequests();
-             const normalized = Array.isArray(data) ? data.map(normalizeRequest) : [];
-             setRequests(normalized);
-             const pendingNotifs = normalized
-               .filter(r => r.status === 'Pending')
-               .map(toNotification);
-             setNotifications(sortNotifications(pendingNotifs));
-         } catch {
-             // silently fail
-         }
+         await syncRequestsFromServer();
      };
      fetchInitialRequests();
 
@@ -292,6 +296,7 @@ const TteDashboard = () => {
 
      newSocket.on('connect', () => {
        flushQueue();
+       syncRequestsFromServer();
      });
 
      newSocket.on('tte_request_updated', (req) => {
@@ -320,7 +325,7 @@ const TteDashboard = () => {
        newSocket.disconnect();
        socketRef.current = null;
      };
-  }, [flushQueue]);
+  }, [flushQueue, syncRequestsFromServer]);
 
   useEffect(() => {
     window.localStorage.setItem(TTE_CACHE_KEY, JSON.stringify(requests));

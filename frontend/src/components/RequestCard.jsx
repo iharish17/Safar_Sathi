@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion } from 'framer-motion';
 import { User, Train, Clock, MapPin, Check, X, ShieldAlert } from 'lucide-react';
 import '../styles/RequestCard.css';

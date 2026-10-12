@@ -97,7 +97,11 @@ npm run dev
 ### Testing Mock Data
 
 Use the PNR number to test the app:
-- `5475698745` - Train 18102 (JAMMU TAWI - JAT → TATANAGAR JN)
+- `1247945324` - Train 18102 (JAT to TATA JN)
+- `4928174021` - Train 01211 (BADNERA JN to MANMAD JN)
+- `5475694597` - Train 01211 (AKOLA JN to NASIK ROAD)
+- `1234567890` - Train 01209 (BADNERA JN to MANMAD JN)
+- `0987654321` - Train 01209 (AKOLA JN to PUNE JN)
 
 
 ### Deployment

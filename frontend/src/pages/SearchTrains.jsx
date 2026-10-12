@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Fragment, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Search, MapPin, Clock } from 'lucide-react';
@@ -605,7 +605,7 @@ const SearchTrains = () => {
                   const actualDeparture = hasPassedOrCurrent ? getShiftedTime(stop.departs, routeDelay) : '---';
 
                   return (
-                    <React.Fragment key={`${stop.sno}-${stop.stationName}`}>
+                    <Fragment key={`${stop.sno}-${stop.stationName}`}>
                       {isFirstOfDay && (
                         <div
                           className="status-day-marker"
@@ -644,7 +644,7 @@ const SearchTrains = () => {
                           <span className={`time-live ${delayState}`}>{actualDeparture}</span>
                         </div>
                       </div>
-                    </React.Fragment>
+                    </Fragment>
                   );
                 })}
                 </div>

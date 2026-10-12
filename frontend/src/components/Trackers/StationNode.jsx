@@ -1,5 +1,3 @@
-import React from 'react';
-
 const StationNode = ({ station, status, isLast }) => {
   let textColor = 'text-gray-700';
   let pulse = false;

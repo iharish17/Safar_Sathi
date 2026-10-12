@@ -10,7 +10,7 @@
       rgba(250, 253, 255, 0.12) 48%,
       rgba(250, 253, 255, 0.02) 66%
     ),
-    url("/hero-bg.png") center/cover no-repeat fixed;
+    url("https://i.pinimg.com/736x/71/97/62/719762e4b54a91c32827bfd876b9f6af.jpg") center/cover no-repeat fixed;
 }
 
 .landing-nav {
@@ -256,7 +256,7 @@
         rgba(250, 253, 255, 0.08) 52%,
         rgba(250, 253, 255, 0.04) 100%
       ),
-      url("/hero-bg.png") 62% center/cover no-repeat fixed;
+      url("https://i.pinimg.com/736x/71/97/62/719762e4b54a91c32827bfd876b9f6af.jpg") 62% center/cover no-repeat fixed;
   }
 
   .landing-main {

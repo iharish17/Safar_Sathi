@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getPnrDetails, checkCatchStatus, getTteRequests } from '../services/api';
 import { AlertCircle, ShieldCheck, CheckCircle, Home, ChevronRight, Train, MapPin, ArrowRight, X } from 'lucide-react';
@@ -556,6 +556,10 @@ const MissedTrainCalculator = () => {
                 // no-op; keep existing local status
             }
         };
+
+        newSocket.on('connect', () => {
+            refreshCurrentAndRecentStatuses();
+        });
         
         newSocket.on('request_approved', (data) => {
             if (data?.pnr && String(data.pnr).trim() === String(pnr || '').trim()) {
